@@ -66,7 +66,7 @@ jobs:
           class LaunchScreen: UIViewController {}
           EOF
 
-                  # ৩. App.swift (Functional Import & EXE System) তৈরি
+          # ৩. App.swift (Final Fix: Support all file types including .exe)
           cat <<'EOF' > WinHub/App.swift
           import SwiftUI
           import UniformTypeIdentifiers
@@ -81,108 +81,104 @@ jobs:
           }
 
           struct PS4HomeView: View {
-              @State private var selectedGamePath: String = ""
+              @State private var selectedGameName: String = "No EXE Selected"
+              @State private var selectedFileURL: URL? = nil
               @State private var isBooting = false
               @State private var showFileImporter = false
               @State private var selectedIndex = 0
               
               let menuItems = [
-                  ("Run EXE", "play.circle.fill", Color.green),
-                  ("Import Game", "folder.badge.plus", Color.blue),
-                  ("Library", "square.grid.2x2", Color.purple),
-                  ("Settings", "gearshape.fill", Color.gray)
+                  ("Run Game", "play.fill", Color.green),
+                  ("Import EXE", "doc.badge.plus", Color.blue),
+                  ("Settings", "slider.horizontal.3", Color.gray)
               ]
 
               var body: some View {
                   ZStack {
-                      // Background
-                      LinearGradient(gradient: Gradient(colors: [Color(red: 0, green: 0, blue: 0.3), .black]), startPoint: .top, endPoint: .bottom)
+                      // PS4 Premium Background
+                      LinearGradient(gradient: Gradient(colors: [Color(red: 0, green: 0, blue: 0.2), .black]), startPoint: .top, endPoint: .bottom)
                           .ignoresSafeArea()
 
                       if isBooting {
-                          EmulatorView(exeName: selectedGamePath) { isBooting = false }
+                          EmulatorView(exeURL: selectedFileURL) { isBooting = false }
                       } else {
-                          VStack(alignment: .leading) {
-                              // Top Profile
+                          VStack(spacing: 30) {
+                              // Top Header
                               HStack {
-                                  Image(systemName: "person.crop.circle.badge.checkmark").font(.title)
-                                  Text("Sifat-E-Rabbi").font(.headline)
-                                  Spacer()
-                                  if !selectedGamePath.isEmpty {
-                                      Text("Selected: \(selectedGamePath)").font(.caption).foregroundColor(.green)
+                                  VStack(alignment: .leading) {
+                                      Text("Sifat-E-Rabbi's Console").font(.title2).bold()
+                                      Text(selectedGameName).font(.subheadline).foregroundColor(.blue)
                                   }
+                                  Spacer()
+                                  Image(systemName: "wifi").padding()
+                                  Text("12:00").bold()
                               }
-                              .foregroundColor(.white).padding(.horizontal, 50).padding(.top, 30)
+                              .foregroundColor(.white).padding(.horizontal, 50).padding(.top, 20)
 
                               Spacer()
 
-                              // Menu Items
-                              ScrollView(.horizontal, showsIndicators: false) {
-                                  HStack(spacing: 30) {
-                                      ForEach(0..<menuItems.count, id: \.self) { index in
-                                          VStack {
-                                              ZStack {
-                                                  RoundedRectangle(cornerRadius: 20)
-                                                      .fill(menuItems[index].2.opacity(0.8))
-                                                      .frame(width: 160, height: 160)
-                                                      .overlay(
-                                                          RoundedRectangle(cornerRadius: 20)
-                                                              .stroke(selectedIndex == index ? Color.white : Color.clear, lineWidth: 4)
-                                                      )
-                                                      .shadow(color: selectedIndex == index ? .white.opacity(0.5) : .clear, radius: 10)
+                              // Menu Selection
+                              HStack(spacing: 40) {
+                                  ForEach(0..<menuItems.count, id: \.self) { index in
+                                      VStack {
+                                          ZStack {
+                                              RoundedRectangle(cornerRadius: 25)
+                                                  .fill(menuItems[index].2.opacity(selectedIndex == index ? 0.9 : 0.4))
+                                                  .frame(width: 200, height: 200)
+                                                  .overlay(
+                                                      RoundedRectangle(cornerRadius: 25)
+                                                          .stroke(selectedIndex == index ? Color.white : Color.clear, lineWidth: 6)
+                                                  )
+                                                  .shadow(color: selectedIndex == index ? menuItems[index].2 : .clear, radius: 20)
 
-                                                  Image(systemName: menuItems[index].1)
-                                                      .font(.system(size: 50))
-                                                      .foregroundColor(.white)
-                                              }
-                                              Text(menuItems[index].0).foregroundColor(.white).bold().padding(.top, 10)
+                                              Image(systemName: menuItems[index].1)
+                                                  .font(.system(size: 70))
+                                                  .foregroundColor(.white)
                                           }
-                                          .scaleEffect(selectedIndex == index ? 1.1 : 1.0)
-                                          .onTapGesture {
-                                              selectedIndex = index
-                                              handleMenuAction(index)
+                                          Text(menuItems[index].0).foregroundColor(.white).font(.headline).padding(.top, 10)
+                                      }
+                                      .scaleEffect(selectedIndex == index ? 1.1 : 0.9)
+                                      .onTapGesture {
+                                          selectedIndex = index
+                                          if index == 0 && selectedFileURL != nil {
+                                              isBooting = true
+                                          } else if index == 1 {
+                                              showFileImporter = true
                                           }
                                       }
                                   }
-                                  .padding(.horizontal, 80)
                               }
 
                               Spacer()
+                              
+                              Text("Select the EXE file from your library and press Run").font(.caption).foregroundColor(.gray)
                           }
                       }
                   }
-                  // ফাইল ইম্পোর্টার (এটির মাধ্যমে ফোল্ডার/ফাইল এক্সেস করা হবে)
+                  // এখানে .data এবং .item টাইপ যোগ করা হয়েছে যাতে .exe ফাইল সিলেক্ট করা যায়
                   .fileImporter(
                       isPresented: $showFileImporter,
-                      allowedContentTypes: [.item], // .exe বা যেকোনো ফাইল টাইপ
+                      allowedContentTypes: [UTType.data, UTType.item, UTType.content],
                       allowsMultipleSelection: false
                   ) { result in
                       do {
-                          let fileUrl = try result.get().first!
-                          // ফাইল এক্সেস পারমিশন নেওয়া
-                          if fileUrl.startAccessingSecurityScopedResource() {
-                              selectedGamePath = fileUrl.lastPathComponent
-                              fileUrl.stopAccessingSecurityScopedResource()
+                          guard let url = try result.get().first else { return }
+                          
+                          // সিকিউরিটি পারমিশন নেওয়া
+                          if url.startAccessingSecurityScopedResource() {
+                              selectedFileURL = url
+                              selectedGameName = url.lastPathComponent
+                              url.stopAccessingSecurityScopedResource()
                           }
                       } catch {
-                          print("Import failed: \(error.localizedDescription)")
+                          print("Error: \(error.localizedDescription)")
                       }
-                  }
-              }
-
-              func handleMenuAction(_ index: Int) {
-                  if index == 0 { // Run EXE
-                      if !selectedGamePath.isEmpty {
-                          isBooting = true
-                      }
-                  } else if index == 1 { // Import
-                      showFileImporter = true
                   }
               }
           }
 
           struct EmulatorView: View {
-              let exeName: String
+              let exeURL: URL?
               var onExit: () -> Void
               
               var body: some View {
@@ -191,32 +187,34 @@ jobs:
                       VStack {
                           HStack {
                               Button(action: onExit) {
-                                  Image(systemName: "xmark.circle.fill").font(.title).foregroundColor(.red)
-                              }.padding()
+                                  Image(systemName: "power").font(.title).foregroundColor(.red)
+                              }.padding(40)
                               Spacer()
-                              Text("Running: \(exeName)").foregroundColor(.gray)
-                          }
-                          Spacer()
-                          
-                          // এইখানে ভবিষ্যতে Wine/Box86 লেয়ার কানেক্ট হবে
-                          VStack(spacing: 20) {
-                              ProgressView().tint(.blue)
-                              Text("Emulating Windows Environment...").foregroundColor(.white)
-                              Text("Please wait for the EXE to load").font(.caption).foregroundColor(.gray)
                           }
                           
                           Spacer()
-                          // গেমিং কন্ট্রোলার UI (PS4 Style)
+                          
+                          VStack(spacing: 30) {
+                              Image(systemName: "cpu").font(.system(size: 80)).foregroundColor(.blue)
+                              Text("BOOTING SYSTEM").font(.largeTitle).bold().foregroundColor(.white)
+                              Text("Loading: \(exeURL?.lastPathComponent ?? "Unknown")").foregroundColor(.gray)
+                              ProgressView().tint(.white).scaleEffect(1.5)
+                          }
+                          
+                          Spacer()
+                          
+                          // Bottom Controls (PS4 Layout)
                           HStack {
-                              Circle().frame(width: 100, height: 100).foregroundColor(.white.opacity(0.1)).overlay(Text("L"))
+                              Circle().stroke(Color.white.opacity(0.2), lineWidth: 2).frame(width: 120, height: 120).overlay(Text("L"))
                               Spacer()
-                              Circle().frame(width: 100, height: 100).foregroundColor(.white.opacity(0.1)).overlay(Text("R"))
-                          }.padding(50)
+                              Circle().stroke(Color.white.opacity(0.2), lineWidth: 2).frame(width: 120, height: 120).overlay(Text("R"))
+                          }.padding(60)
                       }
                   }
               }
           }
           EOF
+
 
 
 
