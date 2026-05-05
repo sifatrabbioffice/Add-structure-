@@ -1,74 +1,7 @@
-name: WinHub Production Build (Fixed Null Error)
-
-on:
-  push:
-    branches: [ main ]
-  workflow_dispatch:
-
-jobs:
-  build:
-    name: Build IPA
-    runs-on: macos-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Install XcodeGen
-        run: brew install xcodegen
-
-      - name: Setup Node.js 24
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-
-      - name: Generate Source Files and Plist
-        run: |
-          mkdir -p WinHub
-          
-          # ১. Info.plist তৈরি (সংশোধিত - CFBundleExecutable যুক্ত করা হয়েছে)
-          cat <<'EOF' > WinHub/Info.plist
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleExecutable</key>
-            <string>WinHub</string>
-            <key>CFBundleIdentifier</key>
-            <string>com.winhub.emulator.promax</string>
-            <key>CFBundleName</key>
-            <string>WinHub</string>
-            <key>CFBundlePackageType</key>
-            <string>APPL</string>
-            <key>CFBundleShortVersionString</key>
-            <string>1.0</string>
-            <key>CFBundleVersion</key>
-            <string>1</string>
-            <key>LSRequiresIPhoneOS</key>
-            <true/>
-            <key>UIFileSharingEnabled</key>
-            <true/>
-            <key>LSSupportsOpeningDocumentsInPlace</key>
-            <true/>
-            <key>UILaunchStoryboardName</key>
-            <string>LaunchScreen</string>
-            <key>UISupportedInterfaceOrientations</key>
-            <array>
-              <string>UIInterfaceOrientationLandscapeLeft</string>
-              <string>UIInterfaceOrientationLandscapeRight</string>
-            </array>
-          </dict>
-          </plist>
-          EOF
-
-          # ২. LaunchScreen.swift তৈরি
-          cat <<'EOF' > WinHub/LaunchScreen.swift
-          import UIKit
-          class LaunchScreen: UIViewController {}
-          EOF
-
-           # ৩. App.swift (PS4 Style UI) তৈরি
+          # ৩. App.swift (Functional Import & EXE System) তৈরি
           cat <<'EOF' > WinHub/App.swift
           import SwiftUI
+          import UniformTypeIdentifiers
 
           @main
           struct WinHubApp: App {
@@ -80,131 +13,139 @@ jobs:
           }
 
           struct PS4HomeView: View {
-              let games = [
-                  ("Windows Environment", "desktopcomputer", Color.blue),
-                  ("EXE Runner", "cpu", Color.purple),
-                  ("Settings", "gearshape.fill", Color.gray),
-                  ("Library", "square.grid.2x2", Color.orange)
-              ]
-              
-              @State private var selectedGame = 0
+              @State private var selectedGamePath: String = ""
               @State private var isBooting = false
+              @State private var showFileImporter = false
+              @State private var selectedIndex = 0
+              
+              let menuItems = [
+                  ("Run EXE", "play.circle.fill", Color.green),
+                  ("Import Game", "folder.badge.plus", Color.blue),
+                  ("Library", "square.grid.2x2", Color.purple),
+                  ("Settings", "gearshape.fill", Color.gray)
+              ]
 
               var body: some View {
                   ZStack {
-                      // PS4 Dynamic Background Gradient
-                      LinearGradient(gradient: Gradient(colors: [Color(red: 0, green: 0, blue: 0.2), .black]), startPoint: .topLeading, endPoint: .bottomTrailing)
+                      // Background
+                      LinearGradient(gradient: Gradient(colors: [Color(red: 0, green: 0, blue: 0.3), .black]), startPoint: .top, endPoint: .bottom)
                           .ignoresSafeArea()
 
                       if isBooting {
-                          BootingView { isBooting = false }
+                          EmulatorView(exeName: selectedGamePath) { isBooting = false }
                       } else {
-                          VStack(alignment: .leading, spacing: 20) {
-                              // Top Bar
+                          VStack(alignment: .leading) {
+                              // Top Profile
                               HStack {
-                                  Image(systemName: "person.circle.fill").font(.title)
-                                  Text("Sifat-E-Rabbi").bold()
+                                  Image(systemName: "person.crop.circle.badge.checkmark").font(.title)
+                                  Text("Sifat-E-Rabbi").font(.headline)
                                   Spacer()
-                                  Text("10:42 AM").font(.caption)
-                              }
-                              .foregroundColor(.white).padding(.horizontal, 40).padding(.top, 20)
-
-                              Spacer()
-
-                              // Game Tiles (Horizontal Scroll)
-                              ScrollViewReader { proxy in
-                                  ScrollView(.horizontal, showsIndicators: false) {
-                                      HStack(spacing: 25) {
-                                          ForEach(0..<games.count, id: \.self) { index in
-                                              VStack(spacing: 15) {
-                                                  ZStack {
-                                                      RoundedRectangle(cornerRadius: 15)
-                                                          .fill(games[index].2.opacity(0.8))
-                                                          .frame(width: 180, height: 180)
-                                                          .overlay(
-                                                              RoundedRectangle(cornerRadius: 15)
-                                                                  .stroke(selectedGame == index ? Color.white : Color.clear, lineWidth: 5)
-                                                          )
-                                                          .shadow(color: selectedGame == index ? games[index].2 : .clear, radius: 20)
-
-                                                      Image(systemName: games[index].1)
-                                                          .font(.system(size: 60))
-                                                          .foregroundColor(.white)
-                                                  }
-                                                  
-                                                  if selectedGame == index {
-                                                      Text(games[index].0)
-                                                          .foregroundColor(.white)
-                                                          .font(.headline)
-                                                          .transition(.opacity)
-                                                  }
-                                              }
-                                              .scaleEffect(selectedGame == index ? 1.1 : 0.9)
-                                              .onTapGesture {
-                                                  selectedGame = index
-                                                  if games[index].0 == "Windows Environment" { isBooting = true }
-                                              }
-                                          }
-                                      }
-                                      .padding(.horizontal, 100)
+                                  if !selectedGamePath.isEmpty {
+                                      Text("Selected: \(selectedGamePath)").font(.caption).foregroundColor(.green)
                                   }
                               }
+                              .foregroundColor(.white).padding(.horizontal, 50).padding(.top, 30)
 
                               Spacer()
-                              
-                              // Footer Instructions
-                              HStack {
-                                  HStack { Circle().fill(.white).frame(width: 15).overlay(Text("X").font(.system(size: 10)).foregroundColor(.black)) ; Text("Enter") }
-                                  HStack { Circle().fill(.white).frame(width: 15).overlay(Text("O").font(.system(size: 10)).foregroundColor(.black)) ; Text("Back") }
+
+                              // Menu Items
+                              ScrollView(.horizontal, showsIndicators: false) {
+                                  HStack(spacing: 30) {
+                                      ForEach(0..<menuItems.count, id: \.self) { index in
+                                          VStack {
+                                              ZStack {
+                                                  RoundedRectangle(cornerRadius: 20)
+                                                      .fill(menuItems[index].2.opacity(0.8))
+                                                      .frame(width: 160, height: 160)
+                                                      .overlay(
+                                                          RoundedRectangle(cornerRadius: 20)
+                                                              .stroke(selectedIndex == index ? Color.white : Color.clear, lineWidth: 4)
+                                                      )
+                                                      .shadow(color: selectedIndex == index ? .white.opacity(0.5) : .clear, radius: 10)
+
+                                                  Image(systemName: menuItems[index].1)
+                                                      .font(.system(size: 50))
+                                                      .foregroundColor(.white)
+                                              }
+                                              Text(menuItems[index].0).foregroundColor(.white).bold().padding(.top, 10)
+                                          }
+                                          .scaleEffect(selectedIndex == index ? 1.1 : 1.0)
+                                          .onTapGesture {
+                                              selectedIndex = index
+                                              handleMenuAction(index)
+                                          }
+                                      }
+                                  }
+                                  .padding(.horizontal, 80)
                               }
-                              .foregroundColor(.white.opacity(0.6))
-                              .padding(.horizontal, 40).padding(.bottom, 20)
+
+                              Spacer()
                           }
+                      }
+                  }
+                  // ফাইল ইম্পোর্টার (এটির মাধ্যমে ফোল্ডার/ফাইল এক্সেস করা হবে)
+                  .fileImporter(
+                      isPresented: $showFileImporter,
+                      allowedContentTypes: [.item], // .exe বা যেকোনো ফাইল টাইপ
+                      allowsMultipleSelection: false
+                  ) { result in
+                      do {
+                          let fileUrl = try result.get().first!
+                          // ফাইল এক্সেস পারমিশন নেওয়া
+                          if fileUrl.startAccessingSecurityScopedResource() {
+                              selectedGamePath = fileUrl.lastPathComponent
+                              fileUrl.stopAccessingSecurityScopedResource()
+                          }
+                      } catch {
+                          print("Import failed: \(error.localizedDescription)")
+                      }
+                  }
+              }
+
+              func handleMenuAction(_ index: Int) {
+                  if index == 0 { // Run EXE
+                      if !selectedGamePath.isEmpty {
+                          isBooting = true
+                      }
+                  } else if index == 1 { // Import
+                      showFileImporter = true
+                  }
+              }
+          }
+
+          struct EmulatorView: View {
+              let exeName: String
+              var onExit: () -> Void
+              
+              var body: some View {
+                  ZStack {
+                      Color.black.ignoresSafeArea()
+                      VStack {
+                          HStack {
+                              Button(action: onExit) {
+                                  Image(systemName: "xmark.circle.fill").font(.title).foregroundColor(.red)
+                              }.padding()
+                              Spacer()
+                              Text("Running: \(exeName)").foregroundColor(.gray)
+                          }
+                          Spacer()
+                          
+                          // এইখানে ভবিষ্যতে Wine/Box86 লেয়ার কানেক্ট হবে
+                          VStack(spacing: 20) {
+                              ProgressView().tint(.blue)
+                              Text("Emulating Windows Environment...").foregroundColor(.white)
+                              Text("Please wait for the EXE to load").font(.caption).foregroundColor(.gray)
+                          }
+                          
+                          Spacer()
+                          // গেমিং কন্ট্রোলার UI (PS4 Style)
+                          HStack {
+                              Circle().frame(width: 100, height: 100).foregroundColor(.white.opacity(0.1)).overlay(Text("L"))
+                              Spacer()
+                              Circle().frame(width: 100, height: 100).foregroundColor(.white.opacity(0.1)).overlay(Text("R"))
+                          }.padding(50)
                       }
                   }
               }
           }
-
-          struct BootingView: View {
-              var onBack: () -> Void
-              var body: some View {
-                  VStack {
-                      ProgressView()
-                          .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                          .scaleEffect(2)
-                      Text("Initializing WinHub EXE Layer...").foregroundColor(.white).padding(.top, 30)
-                      Button("Exit", action: onBack).padding().foregroundColor(.red)
-                  }
-              }
-          }
           EOF
-
-
-
-          # ৪. প্রোজেক্ট জেনারেশন
-          xcodegen generate
-
-      - name: Build Archive
-        run: |
-          xcodebuild archive \
-            -project WinHub.xcodeproj \
-            -scheme WinHub \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath build/WinHub.xcarchive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY=""
-
-      - name: Export IPA
-        run: |
-          mkdir -p build/Payload
-          cp -r build/WinHub.xcarchive/Products/Applications/*.app build/Payload/
-          cd build
-          zip -qr WinHub_Final.ipa Payload
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: WinHub-App-Package
-          path: build/WinHub_Final.ipa
