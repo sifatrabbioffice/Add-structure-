@@ -1,119 +1,133 @@
-import SwiftUI
-import UniformTypeIdentifiers
+name: WinHub Production Build (Optimized)
 
-@main
-struct WinHubApp: App {
-    var body: some Scene {
-        WindowGroup {
-            PS4HomeView()
-        }
-    }
-}
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
 
-struct PS4HomeView: View {
-    @State private var selectedGameName: String = "No Game Loaded"
-    @State private var selectedFileURL: URL? = nil
-    @State private var isBooting = false
-    @State private var showFileImporter = false
-    @State private var downloadStatus = ""
-    @State private var isDownloading = false
+jobs:
+  build-ipa:
+    name: Build Unsigned IPA
+    runs-on: macos-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-    var body: some View {
-        ZStack {
-            // Background - Simplified for the compiler
-            Color.black.ignoresSafeArea()
-            LinearGradient(
-                gradient: Gradient(colors: [Color(red: 0, green: 0.1, blue: 0.3), .black]),
-                startPoint: .top,
-                endPoint: .bottom
-            ).ignoresSafeArea()
+      - name: Install XcodeGen
+        run: brew install xcodegen
 
-            if isBooting {
-                EmulatorView(exeURL: selectedFileURL) { isBooting = false }
-            } else {
-                mainInterface
-            }
-        }
-        .fileImporter(isPresented: $showFileImporter, allowedContentTypes: [.data, .item]) { result in
-            if let url = try? result.get().first {
-                selectedFileURL = url
-                selectedGameName = url.lastPathComponent
-            }
-        }
-    }
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20' # Using standard LTS to ensure stable runner execution
 
-    // Extracted subview to reduce compiler complexity
-    private var mainInterface: some View {
-        VStack(spacing: 30) {
-            Text("Sifat-E-Rabbi's WinHub")
-                .font(.largeTitle)
-                .bold()
-                .foregroundColor(.white)
-            
-            Text(selectedGameName)
-                .foregroundColor(.blue)
+      - name: Generate Source Files & Info.plist
+        run: |
+          mkdir -p WinHub
+          
+          # 1. Generate Info.plist
+          cat <<'EOF' > WinHub/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleExecutable</key>
+            <string>WinHub</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.winhub.emulator.promax</string>
+            <key>CFBundleName</key>
+            <string>WinHub</string>
+            <key>CFBundlePackageType</key>
+            <string>APPL</string>
+            <key>CFBundleShortVersionString</key>
+            <string>1.0</string>
+            <key>CFBundleVersion</key>
+            <string>1</string>
+            <key>LSRequiresIPhoneOS</key>
+            <true/>
+            <key>UIFileSharingEnabled</key>
+            <true/>
+            <key>LSSupportsOpeningDocumentsInPlace</key>
+            <true/>
+            <key>UILaunchStoryboardName</key>
+            <string>LaunchScreen</string>
+            <key>UISupportedInterfaceOrientations</key>
+            <array>
+              <string>UIInterfaceOrientationLandscapeLeft</string>
+              <string>UIInterfaceOrientationLandscapeRight</string>
+            </array>
+          </dict>
+          </plist>
+          EOF
 
-            HStack(spacing: 20) {
-                Button(action: { if selectedFileURL != nil { isBooting = true } }) {
-                    VStack {
-                        Image(systemName: "play.fill").font(.system(size: 50))
-                        Text("Play Game")
-                    }
-                    .frame(width: 150, height: 150)
-                    .background(Color.green)
-                    .cornerRadius(20)
-                    .foregroundColor(.white)
-                }
+          # 2. Generate LaunchScreen.swift
+          cat <<'EOF' > WinHub/LaunchScreen.swift
+          import UIKit
+          class LaunchScreen: UIViewController {}
+          EOF
 
-                Button(action: { showFileImporter = true }) {
-                    VStack {
-                        Image(systemName: "plus.rectangle.fill").font(.system(size: 50))
-                        Text("Import EXE")
-                    }
-                    .frame(width: 150, height: 150)
-                    .background(Color.blue)
-                    .cornerRadius(20)
-                    .foregroundColor(.white)
-                }
-            }
+          # 3. Generate App.swift
+          cat <<'EOF' > WinHub/App.swift
+          import SwiftUI
 
-            Button(action: downloadRuntimes) {
-                HStack {
-                    if isDownloading { ProgressView().padding(.trailing, 10) }
-                    Text(isDownloading ? "Downloading..." : "Download C++ & DirectX")
-                }
-                .padding()
-                .background(Color.orange)
-                .cornerRadius(10)
-                .foregroundColor(.black)
-                .bold()
-            }
-            
-            Text(downloadStatus).font(.caption).foregroundColor(.gray)
-        }
-    }
+          @main
+          struct WinHubApp: App {
+              var body: some Scene {
+                  WindowGroup {
+                      MainView()
+                  }
+              }
+          }
 
-    func downloadRuntimes() {
-        isDownloading = true
-        downloadStatus = "Connecting to Microsoft Servers..."
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            self.downloadStatus = "C++ Runtimes & DirectX installed."
-            self.isDownloading = false
-        }
-    }
-}
+          struct MainView: View {
+              var body: some View {
+                  ZStack {
+                      Color.black.ignoresSafeArea()
+                      VStack {
+                          Text("WINHUB").font(.system(size: 50, weight: .black)).foregroundColor(.blue)
+                          Text("Status: System Operational").foregroundColor(.green)
+                          Spacer()
+                          Text("Sifat, 15 Pro Max Environment Ready").foregroundColor(.pink)
+                      }
+                      .padding()
+                  }
+              }
+          }
+          EOF
 
-struct EmulatorView: View {
-    let exeURL: URL?
-    var onExit: () -> Void
-    var body: some View {
-        VStack {
-            Text("BOOTING: \(exeURL?.lastPathComponent ?? "")").foregroundColor(.white).bold()
-            ProgressView().scaleEffect(2).padding()
-            Button("Exit", action: onExit).foregroundColor(.red).padding()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
-    }
-}
+          # 4. Generate Xcode Project
+          # Note: Ensure your project.yml is present in the root directory of your repository.
+          xcodegen generate
+
+      - name: Build Archive
+        run: |
+          xcodebuild archive \
+            -project WinHub.xcodeproj \
+            -scheme WinHub \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/WinHub.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ENTITLEMENTS_REQUIRED=NO
+
+      - name: Package IPA
+        run: |
+          # Create the required iOS Payload structure
+          mkdir -p build/Payload
+          
+          # Copy the compiled .app bundle into the Payload directory using -R to ensure all contents transfer cleanly
+          cp -R build/WinHub.xcarchive/Products/Applications/WinHub.app build/Payload/
+          
+          # Zip the Payload folder to create the .ipa
+          cd build
+          zip -qr WinHub_Final.ipa Payload
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WinHub-iOS-Package
+          path: build/WinHub_Final.ipa
+          retention-days: 7
